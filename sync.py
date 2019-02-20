@@ -19,6 +19,7 @@ from rM2svg import rm2svg
 # needs imagemagick, pdftk
 
 __prog_name__ = "sync"
+__version__ = "0.0.1"
 
 # Parameters and folders for sync
 syncDirectory = "/mnt/c/Users/giorg/Documents/Test-RM"
