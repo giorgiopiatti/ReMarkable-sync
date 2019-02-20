@@ -1,10 +1,17 @@
 # ReMarkable-sync
 Synchronization script for the reMarkable e-reader
 
-Synchronization script for the reMarkable e-reader. The idea is to have a "Library" folder on your PC which is synchronized with the reMarkable. When new files appear in this local directory this script will push them over to the rM. When files are edited, created or annotated on the rM they get converted to .pdf (from .lines) and copied back to the Library folder (with the suffix "_annot").
+Synchronization script for the reMarkable e-reader. The idea is to have a "Library" folder on your PC which is synchronized with the reMarkable. When new files appear in this local directory this script will push them over to the rM. When files are edited, created or annotated on the rM they get converted to .pdf (from .lines) and copied back to the Library folder (with the suffix ".annot").
+Nootebooks are also converted to .pdf (with the suffix ".notes").
+The folder structure of the "Library" is preserved when syncing with the reMarkable and viceversa.
 
 This project is and adaped version of the work of lschwetlick (https://github.com/lschwetlick/rMsync)
-This repository is includes some others script (https://github.com/lschwetlick/maxio/tree/master/tools and https://github.com/reHackable/scripts), to use always the last compatible script.
+This repository is includes the script https://github.com/lschwetlick/maxio/tree/master/tools, to ensure using the lastet version check if a new version is available.
+
+### Example
+- mybook.annot.pdf (annotated file)
+- mybook.pdf (original file)
+- mynotebook.notes.pdf (written notes)
 
 ## Requirements
 - imagemagick
