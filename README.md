@@ -46,7 +46,7 @@ optional arguments:
   -s, --sync                          Sync data between the ReMarkable and the library folder
 ```
 
-##Note:
+## Note:
 You can also remove the last line of the sync method and reboot the device yourself (an UI update is needed to show the new synced files).
 
 ## Known issues
