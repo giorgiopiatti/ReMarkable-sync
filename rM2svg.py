@@ -21,7 +21,6 @@
 #              6 floating point numbers: x, y, pressure, title, unknown, unknown
 #
 #
-# Eric S Fraga
 import sys
 import struct
 import os.path
@@ -86,15 +85,6 @@ def main():
     if not os.path.exists(args.input):
         parser.error('The file "{}" does not exist!'.format(args.input))
 
-    if args.coloured_annotations:
-        global stroke_colour
-        stroke_colour = {
-            0: "blue",
-            1: "red",
-            2: "white",
-            3: "yellow"
-        }
-
     rm2svg(args.input, args.output, args.coloured_annotations,
            args.width, args.height)
 
@@ -106,6 +96,16 @@ def abort(msg):
 
 def rm2svg(input_file, output_name, coloured_annotations=False,
            x_width=default_x_width, y_width=default_y_width):
+    
+    if coloured_annotations:
+        global stroke_colour
+        stroke_colour = {
+            0: "blue",
+            1: "red",
+            2: "white",
+            3: "yellow"
+        }
+
     # Read the file in memory. Consider optimising by reading chunks.
     with open(input_file, 'rb') as f:
         data = f.read()
@@ -158,17 +158,18 @@ def rm2svg(input_file, output_name, coloured_annotations=False,
                 pass # Dynamic width, will be truncated into several strokes
             elif pen == 2 or pen == 4: # Pen / Fineliner
                 width = 32 * width * width - 116 * width + 107
+                width *= 2
             elif pen == 3: # Marker
                 width = 64 * width - 112
                 opacity = 0.9
+                width *= 1.5
             elif pen == 5: # Highlighter
                 width = 30
                 opacity = 0.2
                 if coloured_annotations:
                     colour = 3
             elif pen == 6: # Eraser
-                width = 1280 * width * width - 4800 * width + 4510
-                colour = 2
+                opacity = 0.
             elif pen == 7: # Pencil-Sharp
                 width = 16 * width - 27
                 opacity = 0.9
