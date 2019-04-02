@@ -1,7 +1,4 @@
 #!/usr/bin/env python3
-# Problems:
-# - doesnt export all notebooks
-
 
 ### IMPORTS ###
 import os
@@ -19,17 +16,17 @@ from rM2svg import rm2svg
 # needs imagemagick, pdftk
 
 __prog_name__ = "sync"
-__version__ = "0.0.1"
+__version__ = "0.0.2"
 
 # Parameters and folders for sync
-syncDirectory = "/mnt/c/Users/giorg/Documents/Test-RM"
-remarkableBackupDirectory = "/mnt/c/Users/giorg/Documents/remarkableBackup"
-remarkableWriteDirectory = "/mnt/c/Users/giorg/Documents/remarkableBackup"
+syncDirectory = "SYNC_DIR"
+remarkablePCDirectory = "REMARKABLE_PC_BACKUP"
 remContent = "/xochitl"
+remTemplates = "/templates"
 remarkableDirectory = "/home/root/.local/share/remarkable/xochitl"
+remarkableDirectoryTemplates = "/usr/share/remarkable/templates"
 remarkableUsername = "root"
 remarkableIP = "10.11.99.1"
-bgPath = "/mnt/c/Users/giorg/Documents/remarkableBackup/templates/"
 
 def main():
     parser = ArgumentParser()
@@ -37,77 +34,60 @@ def main():
                         "--backup",
                         help="pass when rM is connected, to back up rM data",
                         action="store_true")
+    parser.add_argument("-s;",
+                        "--sync",
+                        help="Sync data between the ReMarkable and the library folder",
+                        action="store_true")
     parser.add_argument("-c",
                         "--convert",
                         help="use rM files in backup directory to generate annotated PDFs and save them in your library",
                         action="store_true")
     parser.add_argument("-u",
-                        "--upload",
-                        help="upload new files in library to rM",
+                        "--prepare_upload",
+                        help="prepare upload of files",
                         action="store_true")
     parser.add_argument("-d",
                         "--dry_upload",
                         help="just print upload commands",
                         action="store_true")
-    parser.add_argument("-l",
-                        "--makeList",
-                        help="get a list of pdf files on rM",
-                        action="store_true")
-    parser.add_argument("-la",
-                        "--listAllFiles",
-                        help="get a list of files on rM",
-                        action="store_true")
     args = parser.parse_args()
     if args.backup:
-        backupRM()
-    if args.makeList:
-        listFiles()
+        downloadRM()
+    if args.sync:
+        print("Sync in progress")
+        downloadRM()
+        convertFiles()
+        prepareUploadPDF(False)
+        prepareUploadEBUP(False)
+        loadOnRM()
+        sync = "".join(["ssh ", remarkableUsername, "@", remarkableIP, " ",  "systemctl restart xochitl" ])
+        os.system(sync)
     if args.convert:
         convertFiles()
-    if args.upload:
+    if args.prepare_upload:
         print("upload")
-        uploadToRM(args.dry_upload)
-    if args.listAllFiles:
-        printAllFiles()
+        prepareUpload(args.dry_upload)
     print("Done!")
 
 ### BACK UP  (FULL) ###
-def backupRM():
+def downloadRM():
     print("Backing up your remarkable files")
     #Sometimes the remarkable doesnt connect properly. In that case turn off & disconnect -> turn on -> reconnect
-    backupCommand = "".join(["scp -pr ", remarkableUsername, "@", remarkableIP, ":", remarkableDirectory, " ", remarkableBackupDirectory])
+    backupCommand = "".join(["rclone copy -P --exclude *.{thumbnails,cache}/** ", "remarkable:", remarkableDirectory, " ", remarkablePCDirectory + remContent])
     os.system(backupCommand)
-    backupCommandTemplates = "".join(["scp -pr ", remarkableUsername, "@", remarkableIP, ":", "/usr/share/remarkable/templates", " ", bgPath])
+    backupCommandTemplates = "".join(["rclone copy -P ", "remarkable:", remarkableDirectoryTemplates, " ", remarkablePCDirectory + remTemplates])
     os.system(backupCommandTemplates)
 
-def listFiles():
-    rmPdfList = glob.glob(remarkableBackupDirectory + remContent + "/*.pdf")
-    rmPdfNameList = []
-    for f in rmPdfList:
-        refNrPath = f[:-4]
-        meta = json.loads(open(refNrPath + ".metadata").read())
-        rmPdfNameList.append(meta["visibleName"])
-
-    print("rmPdfNameList")
-    print(rmPdfNameList)
-    print("len(rmPdfNameList)")
-    print(len(rmPdfNameList))
-
-def printAllFiles():
-    rmLinesList = glob.glob(remarkableBackupDirectory + remContent + "/*.lines")
-    print(rmLinesList)
-    print(len(rmLinesList))
-    cntr = 0
-    for i in range(0, len(rmLinesList)):
-        refNrPath = rmLinesList[i][:-6]
-        meta = json.loads(open(refNrPath + ".metadata").read())
-        print(meta["visibleName"])
-        cntr += 1
-    print("len ", cntr)
-
+### BACK UP  (FULL) ###
+def loadOnRM():
+    print("Sync remarkable files")
+    #Sometimes the remarkable doesnt connect properly. In that case turn off & disconnect -> turn on -> reconnect
+    backupCommand = "".join(["rclone copy -P --exclude *.{thumbnails,cache}/** ", remarkablePCDirectory + remContent, " ", "remarkable:",remarkableDirectory ])
+    os.system(backupCommand)
+ 
 
 def setDirectory(parent):
-    basePath = remarkableBackupDirectory + remContent + "/"
+    basePath = remarkablePCDirectory + remContent + "/"
     path = ""
     pathArray = []
     while parent != "":
@@ -120,12 +100,12 @@ def setDirectory(parent):
 ### CONVERT TO PDF ###
 def convertFiles():
     #### Get file lists
-    files = [x for x in os.listdir(remarkableBackupDirectory+remContent) if "." not in x]
-    files = [x for x in files if glob.glob(remarkableBackupDirectory+remContent + "/" + x + ".metadata") != [] ]
+    files = [x for x in os.listdir(remarkablePCDirectory+remContent) if "." not in x]
+    files = [x for x in files if glob.glob(remarkablePCDirectory+remContent + "/" + x + ".metadata") != [] ]
 
     for i in range(0, len(files)):
         # get file reference number
-        refNrPath = remarkableBackupDirectory + remContent + "/" + files[i]
+        refNrPath = remarkablePCDirectory + remContent + "/" + files[i]
         # get meta Data
         meta = json.loads(open(refNrPath + ".metadata").read())
         content = json.loads(open(refNrPath + ".content").read())
@@ -176,7 +156,7 @@ def convertFiles():
                                 os.mkdir("temp")
                             except:
                                 pass    
-                            rm2svg(rmpath, "temp/temprm"+str(pg)+".svg", coloured_annotations=False, x_width=pdfx, y_width=pdfy)
+                            rm2svg(rmpath, "temp/temprm"+str(pg)+".svg", coloured_annotations=False)
                             convertSvg2PdfCmd = "".join(["rsvg-convert -f pdf -o ", "temp/temppdf" + str(pg), ".pdf ", "temp/temprm" + str(pg) + ".svg"])
                             os.system(convertSvg2PdfCmd)
                             pdflist.append("temp/temppdf"+str(pg)+".pdf")
@@ -215,7 +195,7 @@ def convertFiles():
                     bg_pg = 0
                     bglist = []
                     for bg in backgrounds:
-                        convertSvg2PdfCmd = "".join(["rsvg-convert -f pdf -o ", "temp/bg_" + str(bg_pg) + ".pdf ", str(bgPath) + bg.replace(" ", "\ ") + ".svg"])
+                        convertSvg2PdfCmd = "".join(["rsvg-convert -f pdf -o ", "temp/bg_" + str(bg_pg) + ".pdf ", str(remarkablePCDirectory + remTemplates) + bg.replace(" ", "\ ") + ".svg"])
                         os.system(convertSvg2PdfCmd)
                         bglist.append("temp/bg_"+str(bg_pg)+".pdf ")
                         bg_pg += 1
@@ -260,8 +240,7 @@ def convertFiles():
                 print(fname + " has not changed")
 
 ### UPLOAD ###
-# TODO: Implement epub sync
-def uploadToRM(dry):
+def prepareUploadPDF(dry):
     # list of files in Library
     syncFilesList = glob.glob(syncDirectory + "/**/*.pdf", recursive=True)
     # remove noted files and notes
@@ -269,11 +248,11 @@ def uploadToRM(dry):
     syncFilesList = [x for x in syncFilesList if ".notes" not in x ]
 
     # list of files on the rM (hashed)
-    rmPdfList = glob.glob(remarkableBackupDirectory + remContent + "/*.pdf")
+    rmPdfList = glob.glob(remarkablePCDirectory + remContent + "/*.pdf")
     rmPdfList = [x[:-4] for x in rmPdfList]
 
     # list of all elements in the remarkable
-    rmElements = glob.glob(remarkableBackupDirectory + remContent + "/*.content")
+    rmElements = glob.glob(remarkablePCDirectory + remContent + "/*.content")
     rmElements = [x[:-8] for x in rmElements]
 
     # list of all folders in the remarkable
@@ -291,8 +270,41 @@ def uploadToRM(dry):
         parentUUID = ""
         for directory in directoriesName:
             parentUUID = mkdir(rmDirectories, parentUUID, directory, dry)
+            rmDirectories.append(remarkablePCDirectory + remContent + '/' + parentUUID)
 
-        cp(rmPdfList, directoryPath, fName, parentUUID, dry)
+        cp(rmPdfList, directoryPath, fName, parentUUID, "pdf", dry)
+
+def prepareUploadEBUP(dry):
+    # list of files in Library
+    syncFilesList = glob.glob(syncDirectory + "/**/*.epub", recursive=True)
+    # remove noted files and notes
+    syncFilesList = [x for x in syncFilesList if ".annot" not in x ]
+    syncFilesList = [x for x in syncFilesList if ".notes" not in x ]
+
+    # list of files on the rM (hashed)
+    rmPdfList = glob.glob(remarkablePCDirectory + remContent + "/*.epub")
+    rmPdfList = [x[:-5] for x in rmPdfList]
+    
+    # list of all elements in the remarkable
+    rmElements = glob.glob(remarkablePCDirectory + remContent + "/*.content")
+    rmElements = [x[:-8] for x in rmElements]
+
+    # list of all folders in the remarkable
+    rmDirectories =  [x for x in rmElements if x not in rmPdfList]
+
+    for pathFile in syncFilesList:
+        pathFile = pathFile[:-5]
+
+        relativePath = os.path.relpath(pathFile, syncDirectory)
+        fName = os.path.basename(pathFile)
+        directoryPath = os.path.dirname(relativePath)
+
+        directoriesName = re.split("/|\\)", directoryPath)
+     
+        parentUUID = ""
+        for directory in directoriesName:
+            parentUUID = mkdir(rmDirectories, parentUUID, directory, dry)
+        cp(rmPdfList, directoryPath, fName, parentUUID, "epub", dry)
 
 # Creates folder if it doesn't exist
 # returns UUID
@@ -305,16 +317,12 @@ def mkdir(rmDirectories, parentUUID, name, dry):
 
     UUID = ""
 
-    if dry:
-        print("Parent UUID: ",parentUUID, " Folder name: ", name)
     for c in candiates:
         meta = json.loads(open(c + ".metadata").read())
         if  meta["visibleName"] == name:
             UUID = os.path.basename(c)
      
     if UUID: #Folder exists
-        if dry:
-            print(name + " --> Folder exist: " + UUID)
         return UUID
     # Create the new folder
     return writeDir(parentUUID, name, dry)
@@ -339,7 +347,7 @@ def writeDir(parentUUID, name, dry):
     }
 
     content = {}
-    basePath = remarkableWriteDirectory + remContent + "/" + UUID
+    basePath = remarkablePCDirectory + remContent + "/" + UUID
 
     print("write dir: " + name + " \t" +  basePath)
     if not dry:
@@ -352,7 +360,7 @@ def writeDir(parentUUID, name, dry):
 
 # Creates folder if it doesn't exist
 # returns UUID
-def cp(rmPdfList, directoryPath, fName, parentUUID, dry):
+def cp(rmPdfList, directoryPath, fName, parentUUID, fType, dry):
     
     candiates = []
     for d in rmPdfList:
@@ -361,39 +369,39 @@ def cp(rmPdfList, directoryPath, fName, parentUUID, dry):
             candiates.append(d)
 
     UUID = ""
-
-    if dry:
-        print("Parent UUID: ", parentUUID, " File name: ", fName)
+    fileExist = False
     
     for c in candiates:
         meta = json.loads(open(c + ".metadata").read())
         if  meta["visibleName"] == fName:
             UUID = os.path.basename(c)
+            fileExist = True
     
     localChanged = True
 
-    basePath = remarkableWriteDirectory + remContent + "/" + UUID
-    if UUID: #Files exists
-        if dry:
-            print(fName + " --> Files exist: " + UUID)
+    basePath = remarkablePCDirectory + remContent + "/" + UUID
 
+    local_annot_mod_time = int(os.path.getmtime(syncDirectory + "/" + directoryPath + "/" + fName + "." + fType))
+    
+    if fileExist:
         meta = json.loads(open(basePath + ".metadata").read())
-        local_annot_mod_time = os.path.getmtime(syncDirectory + "/" + directoryPath + "/" + fName + ".pdf")
-        remote_annot_mod_time = int(meta['lastModified'])/1000 # rm time is in ms
+        remote_annot_mod_time = int(int(meta['lastModified'])/1000) # rm time is in ms
         # has this version changed since we last exported it?
-        print(remote_annot_mod_time, "\t", local_annot_mod_time)
         localChanged = remote_annot_mod_time < local_annot_mod_time
         if localChanged:
-            print("update file: " + fName + " \t" +  basePath)
+            meta['lastModified'] = local_annot_mod_time*1000
+            if not dry:
+                with open(basePath + ".metadata", 'w') as outfile:  
+                    json.dump(meta, outfile)
+            print("update file: " + fName)
     else:
         UUID = str(uuid.uuid4())
-        
-        basePath = remarkableWriteDirectory + remContent + "/" + UUID
+        basePath = remarkablePCDirectory + remContent + "/" + UUID
   
-        content = {"extraMetadata":{},"fileType":"pdf","lastOpenedPage":0,"lineHeight":-1,"margins":180,"textScale":1,"transform":{}}
+        content = {"extraMetadata":{},"fileType": fType,"lastOpenedPage":0,"lineHeight":-1,"margins":180,"textScale":1,"transform":{}}
         metadata = {
             "deleted": False,
-            "lastModified":  int(time.time()*1000.0),
+            "lastModified":  local_annot_mod_time*1000,
             "metadatamodified": False,
             "modified": False,
             "parent": parentUUID,
@@ -419,7 +427,7 @@ def cp(rmPdfList, directoryPath, fName, parentUUID, dry):
     if localChanged: #perform copy
      
         if not dry:
-         shutil.copy(syncDirectory + "/" + directoryPath + "/" + fName + ".pdf", basePath + ".pdf")
+         shutil.copy(syncDirectory + "/" + directoryPath + "/" + fName + "." + fType, basePath + "." + fType)
     
     return UUID
 
